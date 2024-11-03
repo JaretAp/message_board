@@ -1,0 +1,5 @@
+# Ignore database file
+users.db
+
+# Add any other sensitive files
+.env
