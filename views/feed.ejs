@@ -23,8 +23,9 @@
   <h1>Message Board Feed</h1>
 
 <!-- Form to post a new top-level message -->
-<form action="/messages" method="POST" class="top-form">
+<form action="/messages" method="POST" class="top-form" enctype="multipart/form-data">
   <textarea name="content" placeholder="Your message" rows="3" required></textarea>
+  <input type="file" name="image" accept="image/*">
   <button type="submit">Post Message</button>
 </form>
 
@@ -36,6 +37,11 @@
           <div class="message-container">
               <div class="timestamp"><%= new Date(message.timestamp).toLocaleString("en-US", { timeZone: "America/New_York" }) %></div>
               <p class="message-content"><strong><%= message.username %></strong> -> <%= message.content %></p>
+
+              <% if (message.image_path) { %>
+                  <img src="<%= message.image_path %>" alt="Image" style="max-width: 100%; height: auto;">
+              <% } %>
+
 
               <!-- Form to reply to this message -->
               <form action="/reply" method="POST" class="message-content">

@@ -6,6 +6,9 @@ const LocalStrategy = require('passport-local').Strategy;
 const session = require('express-session');
 const app = express();
 const moment = require("moment-timezone");
+const multer = require('multer');
+const path = require('path');
+
 
 // Database setup
 const db = new sqlite3.Database('./users.db', (err) => {
@@ -51,6 +54,11 @@ app.use(session({
     saveUninitialized: false
 }));
 
+// Server Images as Static Files
+const uploadPath = path.join(__dirname, 'uploads');
+app.use('/uploads', express.static(uploadPath));
+
+
 // Initialize Passport
 app.use(passport.initialize());
 app.use(passport.session());
@@ -69,6 +77,31 @@ passport.use(new LocalStrategy(
         });
     }
 ));
+
+ // Storage Setup
+ const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, uploadPath); // Ensure the 'uploads' directory exists
+    },
+    filename: (req, file, cb) => {
+        cb(null, Date.now() + path.extname(file.originalname)); // Save file with a unique name
+    }
+ });
+
+ const upload = multer({
+    storage: storage,
+    limits: { fileSize: 5 * 1024 * 1024 }, //  5MB limit
+    fileFilter: (req, file, cb) => {
+        const fileTypes = /jpeg|jpg|png|gif/;
+        const extname = fileTypes.test(path.extname(file.originalname).toLowerCase());
+        const mimeType = fileTypes.test(file.mimetype);
+
+        if (mimeType && extname) {
+            return cb(null, true);
+        }
+        cb(new Error('Only images are allowed'));
+    }
+ });
 
 // Serialize and deserialize user for session management
 passport.serializeUser((user, done) => done(null, user.id));
@@ -131,7 +164,7 @@ app.post('/login', passport.authenticate('local', {
 app.get('/feed', ensureAuthenticated, (req, res) => {
     // Query to retrieve top-level messages ordered by latest activity (including replies)
     const query = `
-        SELECT m.id, m.content, m.timestamp, u.username, m.parent_id,
+        SELECT m.id, m.content, m.timestamp, u.username, m.image_path, m.parent_id,
                MAX(COALESCE(r.timestamp, m.timestamp)) AS latest_activity
         FROM messages m
         JOIN users u ON m.user_id = u.id
@@ -184,6 +217,52 @@ app.get('/feed', ensureAuthenticated, (req, res) => {
             // Render the view with the organized messages
             res.render('feed', { messages: parentMessages });
         });
+    });
+});
+
+app.post('/messages', ensureAuthenticated, upload.single('image'), (req, res) => {
+    console.log("File info:", req.file); // Log the file info
+    console.log("Content:", req.body.content); // Log the message content
+
+    const userId = req.user.id;
+    const content = req.body.content;
+    const imagePath = req.file ? `/uploads/${req.file.filename}` : null; // Store the path of the uploaded image if provided
+
+    const query = `
+        INSERT INTO messages (user_id, content, image_path, parent_id, timestamp)
+        VALUES (?, ?, ?, NULL, datetime('now'))
+    `;
+
+    db.run(query, [userId, content, imagePath], function (err) {
+        if (err) {
+            console.error("Error saving message:", err.message);
+            res.status(500).send("Error saving message");
+            return;
+        }
+
+        // Option 1: Log the data you have
+        console.log("Message saved:", {
+            id: this.lastID,
+            userId: userId,
+            content: content,
+            imagePath: imagePath,
+        });
+
+        // Option 2: Retrieve and log the inserted message
+        /*
+        const messageId = this.lastID;
+        db.get("SELECT * FROM messages WHERE id = ?", [messageId], function(err, message) {
+            if (err) {
+                console.error("Error retrieving message:", err.message);
+            } else {
+                console.log("Retrieved message:", message);
+            }
+            res.redirect('/feed');
+        });
+        */
+
+        // Use one of the above options
+        res.redirect('/feed'); // Redirect to the feed page after posting
     });
 });
 
