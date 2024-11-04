@@ -5,6 +5,7 @@ const passport = require('passport');
 const LocalStrategy = require('passport-local').Strategy;
 const session = require('express-session');
 const app = express();
+const moment = require("moment-timezone");
 
 // Database setup
 const db = new sqlite3.Database('./users.db', (err) => {
@@ -128,39 +129,85 @@ app.post('/login', passport.authenticate('local', {
 
 // Protected feed route to display all messages
 app.get('/feed', ensureAuthenticated, (req, res) => {
+    // Query to retrieve top-level messages ordered by latest activity (including replies)
     const query = `
-        SELECT messages.content, messages.timestamp, users.username 
-        FROM messages 
-        JOIN users ON messages.user_id = users.id 
-        ORDER BY messages.timestamp DESC
+        SELECT m.id, m.content, m.timestamp, u.username, m.parent_id,
+               MAX(COALESCE(r.timestamp, m.timestamp)) AS latest_activity
+        FROM messages m
+        JOIN users u ON m.user_id = u.id
+        LEFT JOIN messages r ON r.parent_id = m.id OR r.id = m.id
+        WHERE m.parent_id IS NULL
+        GROUP BY m.id
+        ORDER BY latest_activity DESC;
     `;
 
-    db.all(query, (err, rows) => {
+    // First query: Get the top-level messages
+    db.all(query, (err, parentMessages) => {
         if (err) {
+            console.error("Database error:", err.message);
             res.status(500).send("Error retrieving messages");
             return;
         }
-        res.render('feed', { messages: rows });
+
+        // Convert timestamps of parent messages to Eastern Time
+        parentMessages.forEach(msg => {
+            msg.timestamp = moment.utc(msg.timestamp).tz("America/New_York").format("YYYY-MM-DD HH:mm:ss");
+            msg.replies = []; // Initialize an empty array for replies
+        });
+
+        // Second query: Get all replies
+        const replyQuery = `
+            SELECT r.id, r.content, r.timestamp, u.username, r.parent_id
+            FROM messages r
+            JOIN users u ON r.user_id = u.id
+            WHERE r.parent_id IS NOT NULL
+            ORDER BY r.timestamp ASC;
+        `;
+
+        db.all(replyQuery, (err, replies) => {
+            if (err) {
+                console.error("Database error:", err.message);
+                res.status(500).send("Error retrieving replies");
+                return;
+            }
+
+            // Convert timestamps of replies to Eastern Time
+            replies.forEach(reply => {
+                reply.timestamp = moment.utc(reply.timestamp).tz("America/New_York").format("YYYY-MM-DD HH:mm:ss");
+            });
+
+            // Associate replies with their respective parent messages
+            parentMessages.forEach(parent => {
+                parent.replies = replies.filter(reply => reply.parent_id === parent.id).reverse();
+            });
+
+            // Render the view with the organized messages
+            res.render('feed', { messages: parentMessages });
+        });
     });
 });
 
-// Route to handle posting a new message
-app.post('/messages', ensureAuthenticated, (req, res) => {
+
+
+// Replies Route
+app.post('/reply', ensureAuthenticated, (req, res) => {
     const userId = req.user.id;
     const content = req.body.content;
+    const parentId = req.body.parent_id;  // The ID of the message being replied to
 
     if (!content) {
-        return res.status(400).send("Message content is required");
+        return res.status(400).send("Reply content is required");
     }
 
-    db.run("INSERT INTO messages (user_id, content) VALUES (?, ?)", [userId, content], (err) => {
+    db.run("INSERT INTO messages (user_id, content, parent_id) VALUES (?, ?, ?)", [userId, content, parentId], (err) => {
         if (err) {
-            res.status(500).send("Error saving message");
+            res.status(500).send("Error saving reply");
             return;
         }
         res.redirect('/feed');
     });
 });
+
 
 // Profile and logout routes
 app.get('/profile', ensureAuthenticated, (req, res) => {

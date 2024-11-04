@@ -7,36 +7,61 @@
     <style>
         body { font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; }
         h1 { text-align: center; }
-        form { margin-bottom: 20px; }
+        form { margin-bottom: 35px; }
         input, textarea { width: 100%; padding: 8px; margin: 5px 0; }
         button { padding: 10px; width: 100%; background-color: #28a745; color: white; border: none; }
+        .top-form {margin-bottom: 80px; }
         .message { border: 1px solid #ddd; padding: 10px; margin-bottom: 10px; border-radius: 5px; }
         .username { font-weight: bold; }
-        .timestamp { font-size: 0.9em; color: gray; }
+        .timestamp { font-size: 0.9em; color: gray; margin-left: 0px; margin-bottom: 0px;}
+        .message-content { margin-left: 20px;}
+        .message-container { margin-bottom: 50px;}
+        .reply { margin-left: 30px; margin-bottom: 8px;}
     </style>
 </head>
 <body>
-    <h1>Message Board Feed</h1>
+  <h1>Message Board Feed</h1>
 
-    <!-- Form to post a new message -->
-    <form action="/messages" method="POST">
-        <textarea name="content" placeholder="Your message" rows="3" required></textarea>
-        <button type="submit">Post Message</button>
-    </form>
+<!-- Form to post a new top-level message -->
+<form action="/messages" method="POST" class="top-form">
+  <textarea name="content" placeholder="Your message" rows="3" required></textarea>
+  <button type="submit">Post Message</button>
+</form>
 
-    <!-- Check if there are messages to display -->
-    <div id="messages">
-        <% if (messages.length > 0) { %>
-            <% messages.forEach(function(message) { %>
-                <div class="message">
-                    <div class="username"><%= message.username %></div>
-                    <div class="timestamp"><%= new Date(message.timestamp).toLocaleString() %></div>
-                    <p><%= message.content %></p>
-                </div>
-            <% }); %>
-        <% } else { %>
-            <p>No messages yet. Be the first to post a message!</p>
-        <% } %>
-    </div>
+<!-- Display all messages and replies ordered by latest activity -->
+<div id="messages">
+  <% if (messages.length > 0) { %>
+      <% messages.forEach(function(message) { %>
+          <!-- Top-level message -->
+          <div class="message-container">
+              <div class="timestamp"><%= new Date(message.timestamp).toLocaleString("en-US", { timeZone: "America/New_York" }) %></div>
+              <p class="message-content"><strong><%= message.username %></strong> -> <%= message.content %></p>
+
+              <!-- Form to reply to this message -->
+              <form action="/reply" method="POST" class="message-content">
+                  <input type="hidden" name="parent_id" value="<%= message.id %>">
+                  <textarea name="content" placeholder="Reply to this message" rows="2" required></textarea>
+                  <button type="submit">Reply</button>
+              </form>
+
+              <!-- Display replies, if any -->
+              <div class="replies">
+                  <% if (Array.isArray(message.replies) && message.replies.length > 0) { %>
+                      <% message.replies.forEach(function(reply) { %>
+                          <div class="reply">
+                              <div class="timestamp"><%= new Date(reply.timestamp).toLocaleString("en-US", { timeZone: "America/New_York" }) %></div>
+                              <p class="message-content"><strong><%= reply.username %></strong> -> <%= reply.content %></p>
+                          </div>
+                      <% }); %>
+                  <% } %>
+              </div>
+          </div>
+      <% }); %>
+  <% } else { %>
+      <p>No messages yet. Be the first to post a message!</p>
+  <% } %>
+</div>
+
+  
 </body>
 </html>
