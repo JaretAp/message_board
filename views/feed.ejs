@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Message Board Feed</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; }
+        h1 { text-align: center; }
+        form { margin-bottom: 20px; }
+        input, textarea { width: 100%; padding: 8px; margin: 5px 0; }
+        button { padding: 10px; width: 100%; background-color: #28a745; color: white; border: none; }
+        .message { border: 1px solid #ddd; padding: 10px; margin-bottom: 10px; border-radius: 5px; }
+        .username { font-weight: bold; }
+        .timestamp { font-size: 0.9em; color: gray; }
+    </style>
+</head>
+<body>
+    <h1>Message Board Feed</h1>
+
+    <!-- Form to post a new message -->
+    <form action="/messages" method="POST">
+        <textarea name="content" placeholder="Your message" rows="3" required></textarea>
+        <button type="submit">Post Message</button>
+    </form>
+
+    <!-- Check if there are messages to display -->
+    <div id="messages">
+        <% if (messages.length > 0) { %>
+            <% messages.forEach(function(message) { %>
+                <div class="message">
+                    <div class="username"><%= message.username %></div>
+                    <div class="timestamp"><%= new Date(message.timestamp).toLocaleString() %></div>
+                    <p><%= message.content %></p>
+                </div>
+            <% }); %>
+        <% } else { %>
+            <p>No messages yet. Be the first to post a message!</p>
+        <% } %>
+    </div>
+</body>
+</html>
